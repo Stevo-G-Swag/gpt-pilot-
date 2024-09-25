@@ -1,3 +1,8 @@
+"""
+AzureClient module integrates with Azure's OpenAI service, handling API interactions
+and configurations specific to the Azure deployment.
+"""
+
 from httpx import Timeout
 from openai import AsyncAzureOpenAI
 
@@ -9,12 +14,16 @@ log = get_logger(__name__)
 
 
 class AzureClient(OpenAIClient):
+    """
+    AzureClient integrates with Azure's OpenAI service, handling API interactions
+    and configurations specific to the Azure deployment.
+    """
     provider = LLMProvider.AZURE
     stream_options = None
-
     def _init_client(self):
-        azure_deployment = self.config.extra.get("azure_deployment")
-        api_version = self.config.extra.get("api_version")
+        extra: dict = self.config.extra or {}
+        azure_deployment = extra.get("azure_deployment")
+        api_version = extra.get("api_version")
 
         if self.config.base_url is None:
             raise ValueError("Azure endpoint URL (base_url) is not set")
