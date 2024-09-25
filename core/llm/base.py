@@ -6,6 +6,7 @@ from time import time
 from typing import Any, Callable, Optional, Tuple
 
 import httpx
+import tiktoken
 
 from core.config import LLMConfig, LLMProvider
 from core.llm.convo import Convo
@@ -33,8 +34,8 @@ class BaseLLMClient:
         self,
         config: LLMConfig,
         *,
-        stream_handler: Optional[Callable] = None,
-        error_handler: Optional[Callable] = None,
+        stream_handler: Optional[Callable[[str], None]] = None,
+        error_handler: Optional[Callable[[LLMError, str], asyncio.Future]] = None,
     ):
         self.config = config
         self.stream_handler = stream_handler
@@ -73,7 +74,7 @@ class BaseLLMClient:
         convo: Convo,
         *,
         temperature: Optional[float] = None,
-        parser: Optional[Callable] = None,
+        parser: Optional[Callable[[str], Any]] = None,
         max_retries: int = 3,
         json_mode: bool = False,
     ) -> Tuple[Any, LLMRequestLog]:
@@ -108,6 +109,13 @@ class BaseLLMClient:
             model=self.config.model,
             temperature=temperature,
             prompts=convo.prompt_log,
+            response="",
+            error="",
+            status=LLMRequestStatus.SUCCESS,
+            prompt_tokens=0,
+            completion_tokens=0,
+            duration=0.0,
+            messages=[],
         )
 
         prompt_length_kb = len(prompt_text.encode("utf-8")) / 1024
@@ -134,10 +142,10 @@ class BaseLLMClient:
 
             remaining_retries -= 1
             request_log.messages = convo.messages[:]
-            request_log.response = None
+            request_log.response = ""
             request_log.status = LLMRequestStatus.SUCCESS
-            request_log.error = None
-            response = None
+            request_log.error = ""
+            response = ""
 
             try:
                 response, prompt_tokens, completion_tokens = await self._make_request(
@@ -221,8 +229,10 @@ class BaseLLMClient:
         from .groq_client import GroqClient
         from .openai_client import OpenAIClient
 
-        if provider == LLMProvider.OPENAI:
-            return OpenAIClient
+        if provider == LLMProvider.OPENAI_O1_PREVIEW:
+            return OpenAIClient  # Assuming OpenAIClient handles O1-Preview
+        elif provider == LLMProvider.OPENAI_O1_MINI:
+            return OpenAIClient  # Assuming OpenAIClient handles O1-Mini
         elif provider == LLMProvider.ANTHROPIC:
             return AnthropicClient
         elif provider == LLMProvider.GROQ:
@@ -232,25 +242,31 @@ class BaseLLMClient:
         else:
             raise ValueError(f"Unsupported LLM provider: {provider.value}")
 
-    def rate_limit_sleep(self, err: Exception) -> Optional[datetime.timedelta]:
-        return None
+    def rate_limit_sleep(self, err: httpx.HTTPStatusError) -> Optional[datetime.timedelta]:
+        retry_after = err.response.headers.get("Retry-After")
+        if retry_after is not None:
+            try:
+                wait_seconds = int(retry_after)
+                return datetime.timedelta(seconds=wait_seconds)
+            except ValueError:
+                log.warning(f"Invalid Retry-After header value: {retry_after}")
+                return datetime.timedelta(seconds=60)  # Default wait time
+        return datetime.timedelta(seconds=60)  # Default wait time if header not present
 
     def calculate_tokens(self, text: str) -> int:
         """
         Calculate the number of tokens in the given text using the appropriate tokenizer.
         """
         if self.config.provider == LLMProvider.ANTHROPIC:
-            # Use Anthropic's tokenizer
-            # Install the 'anthropic' package if not already installed
-            from anthropic import encoding as anthropic_encoding
-            tokens = anthropic_encoding.count_tokens(text)
-        elif self.config.provider == LLMProvider.OPENAI or self.config.provider == LLMProvider.AZURE:
-            # Use OpenAI's tiktoken tokenizer
-            import tiktoken
-            encoding = tiktoken.encoding_for_model(self.config.model)
+            # Use tiktoken's 'cl100k_base' tokenizer for Anthropic models
+            encoding = tiktoken.get_encoding("cl100k_base")
+            tokens = encoding.encode(text)
+        elif self.config.provider in {LLMProvider.OPENAI_O1_PREVIEW, LLMProvider.OPENAI_O1_MINI, LLMProvider.OPENAI}:
+            # Use tiktoken's 'gpt2' tokenizer for OpenAI models
+            encoding = tiktoken.get_encoding("gpt2")
             tokens = encoding.encode(text)
         else:
-            # Default tokenizer or approximate calculation
+            # Fallback to simple whitespace tokenization
             tokens = text.split()
         return len(tokens)
 
@@ -268,7 +284,7 @@ class BaseLLMClient:
                 continue
             truncated_convo.messages.insert(0, message)
             total_tokens += message_tokens
-        if total_tokens > max_tokens:
+        if total_tokens > max_tokens and truncated_convo.messages:
             # If still over the limit, truncate the earliest message's content
             first_message = truncated_convo.messages[0]
             allowed_tokens = max_tokens - (total_tokens - self.calculate_tokens(first_message['content']))
