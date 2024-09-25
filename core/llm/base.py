@@ -84,6 +84,25 @@ class BaseLLMClient:
         convo = convo.fork()
         convo.messages = messages
 
+        # Define maximum allowed tokens
+        MAX_TOKENS = 199999  # Max tokens allowed by the API
+        BUFFER_TOKENS = 1000  # Reserve tokens for the response
+
+        # Calculate the total tokens of the prompt
+        prompt_text = json.dumps(convo.messages)
+        total_tokens = self.calculate_tokens(prompt_text)
+
+        if total_tokens > MAX_TOKENS - BUFFER_TOKENS:
+            allowed_tokens = MAX_TOKENS - BUFFER_TOKENS
+            log.warning(
+                f"Prompt too long ({total_tokens} tokens). Truncating to {allowed_tokens} tokens."
+            )
+            # Truncate the convo to fit within the allowed tokens
+            convo = self.truncate_prompt(convo, allowed_tokens)
+            # Recalculate total tokens after truncation
+            prompt_text = json.dumps(convo.messages)
+            total_tokens = self.calculate_tokens(prompt_text)
+
         request_log = LLMRequestLog(
             provider=self.provider,
             model=self.config.model,
@@ -91,7 +110,7 @@ class BaseLLMClient:
             prompts=convo.prompt_log,
         )
 
-        prompt_length_kb = len(json.dumps(convo.messages).encode("utf-8")) / 1024
+        prompt_length_kb = len(prompt_text.encode("utf-8")) / 1024
         log.debug(
             f"Calling {self.provider.value} model {self.config.model} (temp={temperature}), prompt length: {prompt_length_kb:.1f} KB"
         )
@@ -215,6 +234,56 @@ class BaseLLMClient:
 
     def rate_limit_sleep(self, err: Exception) -> Optional[datetime.timedelta]:
         return None
+
+    def calculate_tokens(self, text: str) -> int:
+        """
+        Calculate the number of tokens in the given text using the appropriate tokenizer.
+        """
+        if self.config.provider == LLMProvider.ANTHROPIC:
+            # Use Anthropic's tokenizer
+            # Install the 'anthropic' package if not already installed
+            from anthropic import encoding as anthropic_encoding
+            tokens = anthropic_encoding.count_tokens(text)
+        elif self.config.provider == LLMProvider.OPENAI or self.config.provider == LLMProvider.AZURE:
+            # Use OpenAI's tiktoken tokenizer
+            import tiktoken
+            encoding = tiktoken.encoding_for_model(self.config.model)
+            tokens = encoding.encode(text)
+        else:
+            # Default tokenizer or approximate calculation
+            tokens = text.split()
+        return len(tokens)
+
+    def truncate_prompt(self, convo: Convo, max_tokens: int) -> Convo:
+        """
+        Truncate the conversation to fit within the maximum allowed tokens.
+        """
+        truncated_convo = Convo()
+        total_tokens = 0
+        # Start from the most recent messages
+        for message in reversed(convo.messages):
+            message_tokens = self.calculate_tokens(message['content'])
+            if total_tokens + message_tokens > max_tokens:
+                # Skip adding this message to keep within the limit
+                continue
+            truncated_convo.messages.insert(0, message)
+            total_tokens += message_tokens
+        if total_tokens > max_tokens:
+            # If still over the limit, truncate the earliest message's content
+            first_message = truncated_convo.messages[0]
+            allowed_tokens = max_tokens - (total_tokens - self.calculate_tokens(first_message['content']))
+            first_message['content'] = self.truncate_text(first_message['content'], allowed_tokens)
+            truncated_convo.messages[0] = first_message
+        return truncated_convo
+
+    def truncate_text(self, text: str, max_tokens: int) -> str:
+        """
+        Truncate text to the specified maximum number of tokens.
+        """
+        tokens = text.split()
+        if len(tokens) <= max_tokens:
+            return text
+        return ' '.join(tokens[:max_tokens]) + ' ...'
 
 
 __all__ = ["BaseLLMClient"]
