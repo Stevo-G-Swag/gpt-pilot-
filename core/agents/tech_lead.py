@@ -247,7 +247,7 @@ class TechLead(BaseAgent):
         response: UpdatedDevelopmentPlan = await llm(
             convo,
             parser=JSONParser(UpdatedDevelopmentPlan),
-            temperature=0,
+            temperature=1,
         )
         log.debug(f"Reworded last task as: {response.updated_current_epic.description}")
         finished_tasks[-1]["description"] = response.updated_current_epic.description
