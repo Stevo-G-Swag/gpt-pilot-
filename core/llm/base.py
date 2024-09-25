@@ -229,10 +229,8 @@ class BaseLLMClient:
         from .groq_client import GroqClient
         from .openai_client import OpenAIClient
 
-        if provider == LLMProvider.OPENAI_O1_PREVIEW:
-            return OpenAIClient  # Assuming OpenAIClient handles O1-Preview
-        elif provider == LLMProvider.OPENAI_O1_MINI:
-            return OpenAIClient  # Assuming OpenAIClient handles O1-Mini
+        if provider in [LLMProvider.OPENAI, LLMProvider.OPENAI_O1_PREVIEW, LLMProvider.OPENAI_O1_MINI]:
+            return OpenAIClient
         elif provider == LLMProvider.ANTHROPIC:
             return AnthropicClient
         elif provider == LLMProvider.GROQ:

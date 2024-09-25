@@ -66,6 +66,8 @@ class LLMProvider(str, Enum):
     GROQ = "groq"
     LM_STUDIO = "lm-studio"
     AZURE = "azure"
+    OPENAI_O1_PREVIEW = "openai_o1_preview"
+    OPENAI_O1_MINI = "openai_o1_mini"
 
 
 class UIAdapter(str, Enum):
