@@ -1,0 +1,23 @@
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+.git
+.gpt-pilot
+.idea
+.vscode
+.next
+.DS_Store
+__pycache__
+site-packages
+node_modules
+package-lock.json
+venv
+.venv
+dist
+build
+target
+*.min.js
+*.min.css
+*.svg
+*.csv
+*.log
+go.sum
+migration_lock.toml
