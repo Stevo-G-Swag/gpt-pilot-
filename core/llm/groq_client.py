@@ -18,6 +18,7 @@ class GroqClient(BaseLLMClient):
     provider = LLMProvider.GROQ
 
     def _init_client(self):
+        print(f"Using Groq API key: {self.config.api_key}")  # New line added
         self.client = AsyncGroq(
             api_key=self.config.api_key,
             base_url=self.config.base_url,

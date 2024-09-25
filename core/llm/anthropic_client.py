@@ -22,6 +22,7 @@ class AnthropicClient(BaseLLMClient):
     provider = LLMProvider.ANTHROPIC
 
     def _init_client(self):
+        print(f"Using Anthropic API key: {self.config.api_key}")  # New line added
         self.client = AsyncAnthropic(
             api_key=self.config.api_key,
             base_url=self.config.base_url,

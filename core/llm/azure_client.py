@@ -16,6 +16,10 @@ class AzureClient(OpenAIClient):
         azure_deployment = self.config.extra.get("azure_deployment")
         api_version = self.config.extra.get("api_version")
 
+        if self.config.base_url is None:
+            raise ValueError("Azure endpoint URL (base_url) is not set")
+
+        print(f"Using Azure API key: {self.config.api_key}")  # New line added
         self.client = AsyncAzureOpenAI(
             api_key=self.config.api_key,
             azure_endpoint=self.config.base_url,
