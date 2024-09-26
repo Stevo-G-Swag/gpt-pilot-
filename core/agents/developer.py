@@ -178,6 +178,8 @@ class Developer(RelevantFilesMixin, BaseAgent):
 
     async def breakdown_current_task(self) -> AgentResponse:
         current_task = self.current_state.current_task
+        current_task_index = self.current_state.tasks.index(current_task)
+
         current_task["task_review_feedback"] = None
         source = self.current_state.current_epic.get("source", "app")
         await self.ui.send_task_progress(
@@ -195,8 +197,6 @@ class Developer(RelevantFilesMixin, BaseAgent):
 
         if self.current_state.files and self.current_state.relevant_files is None:
             return await self.get_relevant_files()
-
-        current_task_index = self.current_state.tasks.index(current_task)
 
         llm = self.get_llm(TASK_BREAKDOWN_AGENT_NAME, stream_output=True)
         convo = AgentConvo(self).template(

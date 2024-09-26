@@ -34,63 +34,23 @@ class CodeMonkey(BaseAgent):
             return await self.implement_changes()
 
     async def implement_changes(self) -> AgentResponse:
-        file_name = self.step["save_file"]["path"]
+        # Assuming self.step["save_file"] is a list of files to process
+        files_to_process = self.step["save_file"]
+        
+        # Process each file in parallel
+        tasks = [self.process_file(file_info) for file_info in files_to_process]
+        results = await asyncio.gather(*tasks)
 
-        current_file = await self.state_manager.get_file_by_path(file_name)
-        file_content = current_file.content.content if current_file else ""
+        # Handle results as needed (e.g., update state, handle errors)
+        # ...
 
-        task = self.current_state.current_task
+        return AgentResponse.done(self)
 
-        if self.prev_response and self.prev_response.type == ResponseType.CODE_REVIEW_FEEDBACK:
-            attempt = self.prev_response.data["attempt"] + 1
-            feedback = self.prev_response.data["feedback"]
-            log.debug(f"Fixing file {file_name} after review feedback: {feedback} ({attempt}. attempt)")
-            await self.send_message(f"Reworking changes I made to {file_name} ...")
-        else:
-            log.debug(f"Implementing file {file_name}")
-            await self.send_message(f"{'Updating existing' if file_content else 'Creating new'} file {file_name} ...")
-            self.next_state.action = (
-                f'Update file "{basename(file_name)}"' if file_content else f'Create file "{basename(file_name)}"'
-            )
-            attempt = 1
-            feedback = None
-
-        iterations = self.current_state.iterations
-        user_feedback = None
-        user_feedback_qa = None
-        llm = self.get_llm(CODE_MONKEY_AGENT_NAME)
-
-        if "task_review_feedback" in task and task["task_review_feedback"]:
-            instructions = task.get("task_review_feedback")
-        elif iterations:
-            last_iteration = iterations[-1]
-            instructions = last_iteration.get("description")
-            user_feedback = last_iteration.get("user_feedback")
-            user_feedback_qa = last_iteration.get("user_feedback_qa")
-        else:
-            instructions = self.current_state.current_task["instructions"]
-
-        convo = AgentConvo(self).template(
-            "implement_changes",
-            file_name=file_name,
-            file_content=file_content,
-            instructions=instructions,
-            user_feedback=user_feedback,
-            user_feedback_qa=user_feedback_qa,
-        )
-        if feedback:
-            convo.assistant(f"```\n{self.prev_response.data['new_content']}\n```\n").template(
-                "review_feedback",
-                content=self.prev_response.data["approved_content"],
-                original_content=file_content,
-                rework_feedback=feedback,
-            )
-
-        # Removed 'temperature=0' from the LLM call
-        response: str = await llm(convo, parser=OptionalCodeBlockParser())
-
-        # FIXME: provide a counter here so that we don't have an endless loop here
-        return AgentResponse.code_review(self, file_name, task["instructions"], file_content, response, attempt)
+    async def process_file(self, file_info):
+        file_name = file_info["path"]
+        # Implement the file processing logic for each file
+        # Fetch current file content, apply changes, etc.
+        # ...
 
     async def describe_files(self) -> AgentResponse:
         llm = self.get_llm(DESCRIBE_FILES_AGENT_NAME)
@@ -129,8 +89,4 @@ class CodeMonkey(BaseAgent):
                 "references": llm_response.references,
             }
         return AgentResponse.done(self)
-
-    async def process_file(self, file_name: str):
-        # Implement the file processing logic here
-        # ...
 

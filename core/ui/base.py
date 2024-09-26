@@ -350,7 +350,7 @@ class UIBase:
 
     async def send_stream_message(self, message: str, importance: str):
         """
-        Send a stream message with importance level.
+        Send a stream message with an importance level.
 
         :param message: The message to be sent.
         :param importance: Importance level of the message (e.g., 'low', 'medium', 'high').

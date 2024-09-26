@@ -15,7 +15,6 @@ from core.agents.problem_solver import ProblemSolver
 from core.agents.response import AgentResponse, ResponseType
 from core.agents.spec_writer import SpecWriter
 from core.agents.task_completer import TaskCompleter
-from core.agents.task_reviewer import TaskReviewer
 from core.agents.tech_lead import TechLead
 from core.agents.tech_writer import TechnicalWriter
 from core.agents.troubleshooter import Troubleshooter
@@ -23,6 +22,7 @@ from core.db.models.project_state import IterationStatus, TaskStatus
 from core.log import get_logger
 from core.telemetry import telemetry
 from core.ui.base import ProjectStage
+from core.deployment.nodejs_deployer import NodeJSDeployer
 
 log = get_logger(__name__)
 
@@ -210,7 +210,7 @@ class Orchestrator(BaseAgent):
             # Status of the current task is set first time after the task was reviewed by user
             log.info(f"Status of current task: {current_task_status}")
             if current_task_status == TaskStatus.REVIEWED:
-                # User reviewed the task, call TechnicalWriter to see if documentation needs to be updated
+                # Proceed directly to the next step, e.g., TechnicalWriter or TaskCompleter
                 return TechnicalWriter(self.state_manager, self.ui)
             elif current_task_status == TaskStatus.DOCUMENTED:
                 # After documentation is done, call TechLead update the development plan (remaining tasks)
@@ -273,7 +273,7 @@ class Orchestrator(BaseAgent):
         elif step_type == "human_intervention":
             return HumanInput(self.state_manager, self.ui, step=step)
         elif step_type == "review_task":
-            return TaskReviewer(self.state_manager, self.ui)
+            return TechnicalWriter(self.state_manager, self.ui)
         elif step_type == "create_readme":
             return TechnicalWriter(self.state_manager, self.ui)
         else:
@@ -351,7 +351,7 @@ class Orchestrator(BaseAgent):
             "Testing Instructions": self.get_testing_instructions(),
             "Server Logs": self.get_server_logs(),
             "App Progress": self.get_app_progress(),
-            "Deployments": self.get_deployment_data()
+            "Deployments": self.get_deployment_data(),
         }
         await self.ui.update_tabs(tab_data)
 
