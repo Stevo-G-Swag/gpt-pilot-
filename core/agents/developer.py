@@ -206,7 +206,21 @@ class Developer(RelevantFilesMixin, BaseAgent):
             current_task_index=current_task_index,
             docs=self.current_state.docs,
         )
-        response: str = await llm(convo)
+
+        # Step 1: Analyze the problem
+        analysis = await llm(convo.template("analyze_problem"))
+
+        # Step 2: Plan the solution
+        plan = await llm(convo.assistant(analysis).template("plan_solution"))
+
+        # Step 3: Implement the solution
+        implementation = await llm(convo.assistant(plan).template("implement_solution"))
+
+        # Step 4: Review the solution
+        review = await llm(convo.assistant(implementation).template("review_solution"))
+
+        # Combine all steps into the final response
+        response = f"{analysis}\n\n{plan}\n\n{implementation}\n\n{review}"
 
         await self.get_relevant_files(None, response)
 

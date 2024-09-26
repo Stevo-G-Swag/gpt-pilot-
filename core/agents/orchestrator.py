@@ -344,3 +344,18 @@ class Orchestrator(BaseAgent):
 
         stats = telemetry.get_project_stats()
         await self.ui.send_project_stats(stats)
+
+    async def update_tabs(self):
+        tab_data = {
+            "Stream": self.get_stream_data(),
+            "Testing Instructions": self.get_testing_instructions(),
+            "Server Logs": self.get_server_logs(),
+            "App Progress": self.get_app_progress(),
+            "Deployments": self.get_deployment_data()
+        }
+        await self.ui.update_tabs(tab_data)
+
+    async def deploy_nodejs_app(self):
+        deployer = NodeJSDeployer(self.state_manager, self.ui)
+        await deployer.deploy()
+        await self.update_tabs()  # Update the Deployments tab

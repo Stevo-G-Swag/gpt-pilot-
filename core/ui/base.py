@@ -348,6 +348,32 @@ class UIBase:
         """
         raise NotImplementedError()
 
+    async def send_stream_message(self, message: str, importance: str):
+        """
+        Send a stream message with importance level.
+
+        :param message: The message to be sent.
+        :param importance: Importance level of the message (e.g., 'low', 'medium', 'high').
+        """
+        raise NotImplementedError()
+
+    async def send_diff(self, file_path: str, diff: str):
+        """
+        Send a diff for a specific file.
+
+        :param file_path: Path of the file that was changed.
+        :param diff: The diff content.
+        """
+        raise NotImplementedError()
+
+    async def update_tabs(self, tab_data: dict):
+        """
+        Update the content of tabs.
+
+        :param tab_data: Dictionary containing data for each tab.
+        """
+        raise NotImplementedError()
+
 
 pythagora_source = UISource("Pythagora", "pythagora")
 success_source = UISource("Congratulations", "success")

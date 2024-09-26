@@ -140,7 +140,6 @@ class CodeReviewer(BaseAgent):
         )
         # **Removed the explicit 'temperature=0' parameter**
         llm_response: ReviewChanges = await llm(convo, parser=JSONParser(ReviewChanges))
-
         for i in range(MAX_REVIEW_RETRIES):
             reasons = {}
             ids_to_apply = set()
@@ -169,7 +168,6 @@ class CodeReviewer(BaseAgent):
             llm_response = await llm(convo, parser=JSONParser(ReviewChanges))
         else:
             return new_content, None  # **FIXME addressed by limiting retries with the for loop**
-
         hunks_to_apply = [h for i, h in enumerate(hunks) if i in ids_to_apply]
         diff_log = f"--- {file_name}\n+++ {file_name}\n" + "\n".join(hunks_to_apply)
 
@@ -201,6 +199,9 @@ class CodeReviewer(BaseAgent):
             log.info(f"Requesting further rework for {len(hunks_to_rework)} changes to {file_name}")
             return new_content, review_log
         else:
+            # Send diff to UI
+            diff = self.generate_diff(old_content, new_content)
+            await self.ui.send_diff(file_name, diff)
             return new_content, None
 
     @staticmethod

@@ -9,6 +9,8 @@ from core.config import CODE_MONKEY_AGENT_NAME, DESCRIBE_FILES_AGENT_NAME
 from core.llm.parser import JSONParser, OptionalCodeBlockParser
 from core.log import get_logger
 
+import asyncio
+
 log = get_logger(__name__)
 
 
@@ -127,4 +129,8 @@ class CodeMonkey(BaseAgent):
                 "references": llm_response.references,
             }
         return AgentResponse.done(self)
+
+    async def process_file(self, file_name: str):
+        # Implement the file processing logic here
+        # ...
 
