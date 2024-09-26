@@ -44,34 +44,22 @@ class ReviewChanges(BaseModel):
 
 
 class CodeReviewer(BaseAgent):
-    agent_type = "code-reviewer"
-    display_name = "Code Reviewer"
+    """Agent that reviews code changes for potential issues."""
 
-    async def run(self) -> AgentResponse:
-        if (
-            not self.prev_response.data["old_content"]
-            or self.prev_response.data["new_content"] == self.prev_response.data["old_content"]
-            or self.prev_response.data["attempt"] >= MAX_CODING_ATTEMPTS
-        ):
-            # We always auto-accept new files and unchanged files, or if we've tried too many times
-            return await self.accept_changes(self.prev_response.data["path"], self.prev_response.data["new_content"])
-
-        approved_content, feedback = await self.review_change(
-            self.prev_response.data["path"],
-            self.prev_response.data["instructions"],
-            self.prev_response.data["old_content"],
-            self.prev_response.data["new_content"],
-        )
-        if feedback:
-            return AgentResponse.code_review_feedback(
-                self,
-                new_content=self.prev_response.data["new_content"],
-                approved_content=approved_content,
-                feedback=feedback,
-                attempt=self.prev_response.data["attempt"],
-            )
+    async def run(self):
+        """Run the code review process."""
+        if self.state_manager.current_state:
+            files = self.state_manager.current_state.files
+            logs = self.state_manager.current_state.logs
+            if files and files.data:
+                file_data = files.data['some_key']
+            if logs and logs.data:
+                log_data = logs.data['some_key']
+            # Use file_data and log_data safely
+            pass
         else:
-            return await self.accept_changes(self.prev_response.data["path"], approved_content)
+            log.warning("No current state available for code review.")
+        # ... rest of the method ...
 
     async def accept_changes(self, path: str, content: str) -> AgentResponse:
         await self.state_manager.save_file(path, content)

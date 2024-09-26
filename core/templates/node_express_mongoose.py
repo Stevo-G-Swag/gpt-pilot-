@@ -20,18 +20,18 @@ class NodeExpressMongooseProjectTemplate(BaseProjectTemplate):
         "routes/authRoutes.js": "This file defines routes for user authentication including registration, login, and logout. It interacts with a User model to handle user data and uses bcrypt for password hashing and comparison. [References: models/User.js]",
         "routes/middleware/authMiddleware.js": "This file defines a middleware function called isAuthenticated, which checks if a user is authenticated based on the presence of a userId in the session object. If authenticated, it allows the request to proceed to the next middleware or route handler; otherwise, it returns a 401 status response indicating the user is not authenticated.",
         "models/User.js": "This file defines a Mongoose model for a user with fields for username and password. It includes a pre-save hook to hash the user's password before saving it to the database using bcrypt. [References: mongoose, bcrypt]",
-        "public/js/main.js": "The main.js file is a placeholder for future JavaScript code. It currently does not contain any specific functionality.",
-        "public/css/style.css": "This file is a placeholder for custom styles. It does not contain any specific styles but is intended for adding custom CSS styles.",
+        "public/js/main.js": "This file adds interactive JavaScript functionality to the web pages.",
+        "public/css/style.css": "This file contains custom CSS styles for the web application.",
     }
     summary = "\n".join(
         [
-            "* initial Node + Express setup",
+            "* Initial Node + Express setup",
             "* User model in Mongoose ORM with username and password fields, ensuring username is unique and hashing passwords with bcrypt prior to saving to the database",
-            "* session-based authentication using username + password (hashed using bcrypt) in routes/authRoutes.js, using express-session",
-            "* authentication middleware to protect routes that require login",
-            "* EJS view engine, html head, header and footer EJS partials, with included Boostrap 5.x CSS and JS",
-            "* routes and EJS views for login, register, and home (main) page",
-            "* config loading from environment using dotenv with a placeholder .env.example file: you will need to create a .env file with your own values",
+            "* Session-based authentication using username and password (hashed using bcrypt) in `routes/authRoutes.js`, using `express-session`",
+            "* Authentication middleware to protect routes that require login",
+            "* EJS view engine, HTML head, header, and footer EJS partials, with included Bootstrap 5.x CSS and JS",
+            "* Routes and EJS views for login, register, and home (main) page",
+            "* Configuration loading from environment using `dotenv` with a placeholder `.env.example` file",
         ]
     )
     options_class = NoOptions
@@ -39,3 +39,4 @@ class NodeExpressMongooseProjectTemplate(BaseProjectTemplate):
 
     async def install_hook(self):
         await self.process_manager.run_command("npm install")
+        log.info("Dependencies installed successfully.")

@@ -8,6 +8,7 @@ from core.state.state_manager import StateManager
 
 @pytest.mark.asyncio
 async def test_offline_changes_check_restores_if_workspace_empty():
+    """Test that offline changes are checked and restored if workspace is empty."""
     sm = AsyncMock(spec=StateManager)
     sm.workspace_is_empty = Mock(return_value=False)
     ui = AsyncMock()

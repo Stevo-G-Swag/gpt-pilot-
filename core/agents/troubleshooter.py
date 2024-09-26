@@ -1,14 +1,12 @@
-from typing import Optional
-from uuid import uuid4
-
+import uuid
+from typing import Optional, Union
 from pydantic import BaseModel, Field
 
 from core.agents.base import BaseAgent
 from core.agents.convo import AgentConvo
 from core.agents.mixins import IterationPromptMixin, RelevantFilesMixin
-from core.agents.response import AgentResponse
+from core.agents.response import AgentResponse, ResponseType
 from core.config import TROUBLESHOOTER_GET_RUN_COMMAND
-from core.db.models.file import File
 from core.db.models.project_state import IterationStatus, TaskStatus
 from core.llm.parser import JSONParser, OptionalCodeBlockParser
 from core.log import get_logger
@@ -16,18 +14,8 @@ from core.telemetry import telemetry
 
 log = get_logger(__name__)
 
-LOOP_THRESHOLD = 3  # number of iterations in task to be considered a loop
-
-
-class BugReportQuestions(BaseModel):
-    missing_data: list[str] = Field(
-        description="Very clear question that needs to be answered to have good bug report."
-    )
-
-
 class RouteFilePaths(BaseModel):
-    files: list[str] = Field(description="List of paths for files that contain routes")
-
+    files: list[str] = Field(description="List of file paths containing route definitions")
 
 class Troubleshooter(IterationPromptMixin, RelevantFilesMixin, BaseAgent):
     agent_type = "troubleshooter"
@@ -35,104 +23,100 @@ class Troubleshooter(IterationPromptMixin, RelevantFilesMixin, BaseAgent):
 
     async def run(self) -> AgentResponse:
         if self.current_state.unfinished_iterations:
-            if self.current_state.current_iteration.get("status") == IterationStatus.FIND_SOLUTION:
-                return await self.propose_solution()
-            else:
-                raise ValueError("There is unfinished iteration but it's not in FIND_SOLUTION state.")
+            return await self._handle_unfinished_iteration()
         else:
             return await self.create_iteration()
 
-    async def propose_solution(self) -> AgentResponse:
-        user_feedback = self.current_state.current_iteration.get("user_feedback")
-        user_feedback_qa = self.current_state.current_iteration.get("user_feedback_qa")
-        bug_hunting_cycles = self.current_state.current_iteration.get("bug_hunting_cycles")
+    async def _handle_unfinished_iteration(self) -> AgentResponse:
+        if self.current_state.current_iteration.get("status") == IterationStatus.FIND_SOLUTION:
+            return await self.propose_solution()
+        else:
+            raise ValueError("There is unfinished iteration but it's not in FIND_SOLUTION state.")
 
-        llm_solution = await self.find_solution(
-            user_feedback, user_feedback_qa=user_feedback_qa, bug_hunting_cycles=bug_hunting_cycles
+    async def propose_solution(self) -> AgentResponse:
+        iteration = self.current_state.current_iteration
+        llm_solution = await self._get_llm_solution(iteration)
+        self._update_iteration_with_solution(llm_solution)
+        return AgentResponse.done(self)
+
+    async def _get_llm_solution(self, iteration):
+        return await self.find_solution(
+            iteration.get("user_feedback"),
+            user_feedback_qa=iteration.get("user_feedback_qa"),
+            bug_hunting_cycles=iteration.get("bug_hunting_cycles")
         )
 
+    def _update_iteration_with_solution(self, llm_solution):
         self.next_state.current_iteration["description"] = llm_solution
         self.next_state.current_iteration["status"] = IterationStatus.IMPLEMENT_SOLUTION
         self.next_state.flag_iterations_as_modified()
 
-        return AgentResponse.done(self)
-
     async def create_iteration(self) -> AgentResponse:
         run_command = await self.get_run_command()
+        user_instructions = await self._get_user_instructions()
+        
+        if user_instructions is None:
+            return await self.complete_task()
 
+        should_iterate, is_loop, bug_report, change_description = await self.get_user_feedback(
+            run_command, user_instructions, self._has_last_iteration()
+        )
+
+        if not should_iterate:
+            return await self.complete_task()
+
+        self._create_new_iteration(is_loop, bug_report, change_description)
+        return AgentResponse.done(self)
+
+    async def _get_user_instructions(self):
         user_instructions = self.current_state.current_task.get("test_instructions")
         if not user_instructions:
             user_instructions = await self.get_user_instructions()
             if user_instructions is None:
-                # LLM decided we don't need to test anything, so we're done with the task
-                return await self.complete_task()
-
-            # Save the user instructions for future iterations and rerun
+                return None
             self.next_state.current_task["test_instructions"] = user_instructions
             self.next_state.flag_tasks_as_modified()
-            return AgentResponse.done(self)
         else:
             await self.send_message("Here are instruction on how to test the app:\n\n" + user_instructions)
+        return user_instructions
 
-        # Developer sets iteration as "completed" when it generates the step breakdown, so we can't
-        # use "current_iteration" here
-        last_iteration = self.current_state.iterations[-1] if len(self.current_state.iterations) >= 3 else None
+    def _has_last_iteration(self):
+        return len(self.current_state.iterations) >= 3
 
-        should_iterate, is_loop, bug_report, change_description = await self.get_user_feedback(
-            run_command,
-            user_instructions,
-            last_iteration is not None,
-        )
-        if not should_iterate:
-            # User tested and reported no problems, we're done with the task
-            return await self.complete_task()
-
+    def _create_new_iteration(self, is_loop: bool, bug_report: Optional[str], change_description: Optional[str]):
         user_feedback = bug_report or change_description
-        user_feedback_qa = None  # await self.generate_bug_report(run_command, user_instructions, user_feedback)
+        iteration_status = self._determine_iteration_status(is_loop, bug_report)
+        
+        new_iteration = {
+            "id": uuid.uuid4().hex,
+            "user_feedback": user_feedback,
+            "user_feedback_qa": None,
+            "description": None,
+            "alternative_solutions": [],
+            "attempts": 1,
+            "status": iteration_status,
+            "bug_hunting_cycles": [],
+        }
+        
+        self.next_state.iterations.append(new_iteration)
+        
+        if iteration_status == IterationStatus.NEW_FEATURE_REQUESTED:
+            self.get_relevant_files(user_feedback)
 
+    def _determine_iteration_status(self, is_loop: bool, bug_report: Optional[str]) -> IterationStatus:
         if is_loop:
-            if last_iteration["alternative_solutions"]:
-                # If we already have alternative solutions, it means we were already in a loop.
-                return self.try_next_alternative_solution(user_feedback, user_feedback_qa)
-            else:
-                # Newly detected loop
-                iteration_status = IterationStatus.PROBLEM_SOLVER
-                await self.trace_loop("loop-feedback")
+            return IterationStatus.PROBLEM_SOLVER
         elif bug_report is not None:
-            iteration_status = IterationStatus.HUNTING_FOR_BUG
+            return IterationStatus.HUNTING_FOR_BUG
         else:
-            # should be - elif change_description is not None: - but to prevent bugs with the extension
-            # this might be caused if we show the input field instead of buttons
-            await self.get_relevant_files(user_feedback)
-            iteration_status = IterationStatus.NEW_FEATURE_REQUESTED
-
-        self.next_state.iterations = self.current_state.iterations + [
-            {
-                "id": uuid4().hex,
-                "user_feedback": user_feedback,
-                "user_feedback_qa": user_feedback_qa,
-                "description": None,
-                "alternative_solutions": [],
-                # FIXME - this is incorrect if this is a new problem; otherwise we could
-                # just count the iterations
-                "attempts": 1,
-                "status": iteration_status,
-                "bug_hunting_cycles": [],
-            }
-        ]
-
-        self.next_state.flag_iterations_as_modified()
-        if len(self.next_state.iterations) == LOOP_THRESHOLD:
-            await self.trace_loop("loop-start")
-
-        return AgentResponse.done(self)
+            return IterationStatus.NEW_FEATURE_REQUESTED
 
     async def complete_task(self) -> AgentResponse:
         """
         No more coding or user interaction needed for the current task, mark it as reviewed.
         After this it goes to TechnicalWriter for documentation.
         """
-        if len(self.current_state.iterations) >= LOOP_THRESHOLD:
+        if len(self.current_state.iterations) >= 3:
             await self.trace_loop("loop-end")
 
         current_task_index1 = self.current_state.tasks.index(self.current_state.current_task) + 1

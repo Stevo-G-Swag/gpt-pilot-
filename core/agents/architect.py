@@ -1,8 +1,6 @@
 from enum import Enum
-from typing import Any, Optional
-
+from typing import Any, Optional, Type
 from pydantic import BaseModel, Field
-
 from core.agents.base import BaseAgent
 from core.agents.convo import AgentConvo
 from core.agents.response import AgentResponse
@@ -25,7 +23,6 @@ WARN_FRAMEWORKS_URL = "https://github.com/Pythagora-io/gpt-pilot/wiki/Using-GPT-
 
 log = get_logger(__name__)
 
-
 class AppType(str, Enum):
     WEB = "web-app"
     API = "api-service"
@@ -33,38 +30,41 @@ class AppType(str, Enum):
     DESKTOP = "desktop-app"
     CLI = "cli-tool"
 
-
-# FIXME: all the reponse pydantic models should be strict (see config._StrictModel), also check if we
-# can disallow adding custom Python attributes to the model
 class SystemDependency(BaseModel):
     name: str = Field(
-        None,
+        ...,
         description="Name of the system dependency, for example Node.js or Python.",
     )
     description: str = Field(
-        None,
+        ...,
         description="One-line description of the dependency.",
     )
     test: str = Field(
-        None,
+        ...,
         description="Command line to test whether the dependency is available on the system.",
     )
     required_locally: bool = Field(
-        None,
+        ...,
         description="Whether this dependency must be installed locally (as opposed to connecting to cloud or other server)",
     )
 
+    class Config:
+        extra = 'forbid'
+        allow_mutation = False
 
 class PackageDependency(BaseModel):
     name: str = Field(
-        None,
+        ...,
         description="Name of the package dependency, for example Express or React.",
     )
     description: str = Field(
-        None,
+        ...,
         description="One-line description of the dependency.",
     )
 
+    class Config:
+        extra = 'forbid'
+        allow_mutation = False
 
 class Architecture(BaseModel):
     app_type: AppType = Field(
@@ -72,18 +72,21 @@ class Architecture(BaseModel):
         description="Type of the app to build.",
     )
     system_dependencies: list[SystemDependency] = Field(
-        None,
+        ...,
         description="List of system dependencies required to build and run the app.",
     )
     package_dependencies: list[PackageDependency] = Field(
-        None,
+        ...,
         description="List of framework/language-specific packages used by the app.",
     )
 
+    class Config:
+        extra = 'forbid'
+        allow_mutation = False
 
 class TemplateSelection(BaseModel):
     architecture: str = Field(
-        None,
+        ...,
         description="General description of the app architecture.",
     )
     template: Optional[ProjectTemplateEnum] = Field(
@@ -91,6 +94,9 @@ class TemplateSelection(BaseModel):
         description="Project template to use for the app, or null if no template is a good fit.",
     )
 
+    class Config:
+        extra = 'forbid'
+        allow_mutation = False
 
 class Architect(BaseAgent):
     agent_type = "architect"

@@ -100,11 +100,11 @@ class Renderer:
         # Actual full path of the root of the tree we're rendering
         full_root = join(self.template_dir, root)
 
-        for path, subdirs, files in walk(full_root):
+        for path, subdirs, files in os.walk(full_root):
             for file in files:
                 file_path = join(path, file)  # actual full path of the template file
                 tpl_location = relpath(file_path, self.template_dir)  # template relative to template_dir
-                output_location = Path(file_path).relative_to(full_root).as_posix()  # template relative to tree root
+                output_location = relpath(file_path, full_root).replace("\\", "/")  # template relative to tree root
 
                 if filter:
                     output_location = filter(output_location)

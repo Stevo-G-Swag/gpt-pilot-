@@ -43,6 +43,10 @@ def setup(config: LogConfig, force: bool = False):
     logger.addHandler(handler)
 
 
+"""Logging utilities for the application."""
+
+from logging import Logger, getLogger
+
 def get_logger(name) -> Logger:
     """
     Get logger instance for a given (module) name.

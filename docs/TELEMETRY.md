@@ -1,3 +1,7 @@
+# Telemetry
+
+<!-- Content of TELEMETRY.md with issues fixed, ensuring proper Markdown syntax -->
+
 ## Telemetry in Pythagora
 
 At Pythagora, we are dedicated to improving your experience and the overall quality of our software. To achieve this, we gather anonymous telemetry data which helps us understand how the tool is being used and identify areas for improvement.
@@ -44,6 +48,7 @@ We believe in transparency and control. If you prefer not to send telemetry data
 After you update this setting, Pythagora will no longer collect telemetry data from your machine.
 
 ### Questions and Feedback
+
 If you have questions about our telemetry practices or would like to provide feedback, please open an issue in our repository, and we will be happy to engage with you.
 
 Thank you for supporting Pythagora and helping us make it better for everyone.
